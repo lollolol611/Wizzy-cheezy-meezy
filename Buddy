@@ -1,6 +1,6 @@
 import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from '@whiskeysockets/baileys'
 import qrcode from 'qrcode-terminal'
-
+Owner Name Leo
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth')
   const { version } = await fetchLatestBaileysVersion()
