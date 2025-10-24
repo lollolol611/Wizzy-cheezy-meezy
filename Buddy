@@ -1,0 +1,76 @@
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from '@whiskeysockets/baileys'
+import qrcode from 'qrcode-terminal'
+
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth')
+  const { version } = await fetchLatestBaileysVersion()
+  const sock = makeWASocket({
+    version,
+    printQRInTerminal: true,
+    auth: state,
+  })
+
+  sock.ev.on('creds.update', saveCreds)
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update
+    if (connection === 'close') {
+      console.log('❌ Verbindung verloren, starte neu...')
+      startBot()
+    } else if (connection === 'open') {
+      console.log('✅ WhatsApp-Bot ist verbunden!')
+    }
+  })
+
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg.message) return
+
+    const from = msg.key.remoteJid
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ''
+    const sender = msg.pushName || 'Unbekannt'
+
+    console.log(`[${sender}] ${text}`)
+
+    // === BEFEHLE ===
+    if (text.startsWith('!')) {
+      const [cmd, ...args] = text.slice(1).split(' ')
+
+      switch (cmd.toLowerCase()) {
+        case 'ping':
+          await sock.sendMessage(from, { text: '🏓 Pong!' })
+          break
+
+        case 'help':
+          await sock.sendMessage(from, {
+            text: `🤖 *Verfügbare Befehle:*
+!help – zeigt diese Liste
+!ping – Bot-Antwort testen
+!info – zeigt Infos über den Bot`
+          })
+          break
+
+        case 'info':
+          await sock.sendMessage(from, { text: `🤖 Dieser Bot läuft auf *Node.js + Baileys*\nVersion: ${version.join('.')}` })
+          break
+
+        default:
+          await sock.sendMessage(from, { text: `❓ Unbekannter Befehl: *${cmd}*\nSchreib *!help* für Hilfe.` })
+      }
+    }
+  })
+
+  // Gruppen-Events (optional)
+  sock.ev.on('group-participants.update', async (update) => {
+    const { id, participants, action } = update
+    if (action === 'add') {
+      const name = participants[0].split('@')[0]
+      await sock.sendMessage(id, { text: `👋 Willkommen @${name}!`, mentions: participants })
+    } else if (action === 'remove') {
+      const name = participants[0].split('@')[0]
+      await sock.sendMessage(id, { text: `😢 @${name} hat die Gruppe verlassen.`, mentions: participants })
+    }
+  })
+}
+.
+startBot()
